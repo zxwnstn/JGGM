@@ -1,6 +1,7 @@
+
 workspace "JGGM"
 	architecture "x64"
-	startproject "JGGMEngine"
+	startproject "JGGMEditor"
 
 	configurations
 	{
@@ -8,4 +9,10 @@ workspace "JGGM"
 		"Release"
 	}
 
-include "Scripts/JGGMEditor.premake.lua"
+	filter "system:windows"
+	systemversion "latest"
+
+ProjDir = "%{wks.location}/"
+
+include "Scripts/CommonPremake.lua"
+include "Scripts/JGGMEditorPremake.lua"
