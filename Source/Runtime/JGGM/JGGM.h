@@ -1,0 +1,15 @@
+#pragma once
+
+enum class JGGM_RESULT : long long
+{
+	JGGM_SUCCESS = 0,
+	JGGM_FAILED = 0xBAD00000,
+
+	// Fail Reason
+	JGGM_INVALID_ARGS = 0x00000001,
+	JGGM_INTERNAL_FAILURE = 0x00000002,
+	JGGM_INVALID_ACTION = 0x00000003,
+
+};
+
+#define JGGM_ASSERT(IN_JGGM_RESULT) if(IN_JGGM_RESULT != JGGM_RESULT::JGGM_SUCCESS) { /*LOG - show result*/ __debugbreak(); }
