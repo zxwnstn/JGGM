@@ -1,10 +1,14 @@
+group "ThirdParty"
+	include (EngineDir .. "Source/ThirdParty/Imgui")
+group ""
 
+group "JGGM"
 project "JGGMEngine"
 	location (ProjDir .. ProjectFilesDir)
-	kind "SharedLib"
+	kind "StaticLib"
 	language "C++"
 	cppdialect "C++17"
-	staticruntime "on"
+	staticruntime "off"
 	
 	targetdir (ProjDir .. OutputDir)
 	objdir (ProjDir .. BinIntDir)
@@ -17,6 +21,7 @@ project "JGGMEngine"
 	
 	includedirs
 	{
+		EngineDir .. "Source/Runtime",
 		EngineDir .. "Source"
 	}
 
@@ -38,5 +43,5 @@ project "JGGMEngine"
 		defines "JGGM_RELEASE"
 		runtime "Release"
 		optimize "on"
-
+group ""
 	

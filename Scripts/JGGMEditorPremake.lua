@@ -4,7 +4,7 @@ project "JGGMEditor"
 	kind "ConsoleApp"
 	language "C++"
 	cppdialect "C++17"
-	staticruntime "on"
+	staticruntime "off"
 	
 	targetdir (ProjDir .. OutputDir)
 	objdir (ProjDir .. BinIntDir)
@@ -17,6 +17,7 @@ project "JGGMEditor"
 	
 	includedirs
 	{
+		ProjDir .. "Source/Runtime",
 		ProjDir .. "Source"
 	}
 
