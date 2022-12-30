@@ -5,6 +5,25 @@ project "JGGMEngine"
 	language "C++"
 	cppdialect "C++17"
 	staticruntime "on"
+	
+	targetdir (ProjDir .. OutputDir)
+	objdir (ProjDir .. BinIntDir)
+
+	files
+	{
+		EngineDir .. "Source/Runtime/**.h",
+		EngineDir .. "Source/Runtime/**.cpp"
+    }
+	
+	includedirs
+	{
+		EngineDir .. "Source"
+	}
+
+	links
+	{
+		"Imgui"
+	}
 
 	filter "system:windows"
 		systemversion "latest"
@@ -13,25 +32,11 @@ project "JGGMEngine"
 		defines "JGGM_DEBUG"
 		runtime "Debug"
 		symbols "on"
-		targetdir (ProjDir .. OutputDir)
-		objdir (ProjDir .. BinIntDir)
+
 		
 	filter "configurations:Release"
 		defines "JGGM_RELEASE"
 		runtime "Release"
 		optimize "on"
-		targetdir (ProjDir .. OutputDir)
-		objdir (ProjDir .. BinIntDir)
-
-	files
-	{
-		EngineDir .. "Source/**.h",
-		EngineDir .. "Source/**.cpp"
-    }
-	
-	includedirs
-	{
-		EngineDir .. "Source"
-	}
 
 	

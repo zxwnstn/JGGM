@@ -15,4 +15,11 @@ workspace "JGGM"
 ProjDir = "%{wks.location}/"
 
 include "Scripts/CommonPremake.lua"
+
+group "ThirdParty"
+	include "Source/ThirdParty/Imgui"
+group ""
+
 include "Scripts/JGGMEditorPremake.lua"
+
+

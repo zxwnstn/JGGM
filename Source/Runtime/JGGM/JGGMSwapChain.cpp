@@ -3,7 +3,7 @@
 
 JGGMTexture* Present()
 {
-	JGGMAdapter::GetSinleAdapter()->
+	JGGMAdapter::GetSinleAdapter();
 
 	return nullptr;
 }
