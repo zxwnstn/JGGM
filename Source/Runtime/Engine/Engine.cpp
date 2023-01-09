@@ -16,14 +16,28 @@ void FEngine::Initialize()
 	AppInst->Initialize();
 }
 
-int FEngine::Run()
+int32 FEngine::Tick()
 {
-	while (!bRequestedExit)
-	{
+	// Ticker
+	float DeltaTime = 0.0f;
 
-	}
+	AppInst->Tick(DeltaTime);
+
+	extern void ThreadExperimentalWork();
+	ThreadExperimentalWork();
 
 	return 0;
+}
+
+int32 FEngine::Run()
+{
+	int32 ExitCode = 0;
+	while (!bRequestedExit)
+	{
+		ExitCode = Tick();
+	}
+
+	return ExitCode;
 }
 
 FEngine* FEngine::CreateEngine(IAppInstance* AppInst)

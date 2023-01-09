@@ -4,7 +4,7 @@ class IAppInstance
 {
 public:
 	virtual void Initialize();
-	virtual void Tick();
+	virtual void Tick(float DeltaTime);
 };
 
 #if JGGM_EDITOR
@@ -14,7 +14,7 @@ class FEditorInstance
 {
 public:
 	virtual void Initialize() override;
-	virtual void Tick() override;
+	virtual void Tick(float DeltaTime) override;
 };
 
 #else

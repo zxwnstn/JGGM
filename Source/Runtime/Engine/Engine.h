@@ -9,7 +9,8 @@ private:
 
 public:
 	void Initialize();
-	int Run();
+	int32 Run();
+	int32 Tick();
 
 	static FEngine* CreateEngine(IAppInstance* AppInst);
 
