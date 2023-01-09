@@ -1,3 +1,5 @@
+#include "JGGMPch.h"
+
 #include "JGGMSwapChain.h"
 #include "JGGMAdapter.h"
 

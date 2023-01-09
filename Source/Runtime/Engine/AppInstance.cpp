@@ -1,3 +1,5 @@
+#include "JGGMPch.h"
+
 #include "AppInstance.h"
 
 void IAppInstance::Initialize()

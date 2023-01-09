@@ -1,3 +1,5 @@
+#include "JGGMPch.h"
+
 #include "JGGMAdapter.h"
 #include "JGGMDeviceContext.h"
 #include "JGGMSwapChain.h"

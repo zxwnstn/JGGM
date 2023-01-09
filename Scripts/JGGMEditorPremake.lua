@@ -9,6 +9,9 @@ project "JGGMEditor"
 	targetdir (ProjDir .. OutputDir)
 	objdir (ProjDir .. BinIntDir)
 	
+	pchheader ("JGGMPch.h")
+	pchsource (ProjDir .. "Source/Runtime/JGGMPch.cpp")
+
 	files
 	{
 		ProjDir .. "Source/Runtime/**.h",
