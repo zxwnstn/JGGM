@@ -4,6 +4,7 @@ class IAppInstance
 {
 public:
 	virtual void Initialize();
+	virtual void ShutDown();
 	virtual void Tick(float DeltaTime);
 };
 
@@ -14,6 +15,7 @@ class FEditorInstance
 {
 public:
 	virtual void Initialize() override;
+	virtual void ShutDown() override;
 	virtual void Tick(float DeltaTime) override;
 };
 

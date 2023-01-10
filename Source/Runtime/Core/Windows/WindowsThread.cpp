@@ -37,7 +37,7 @@ FWindowsThread::FWindowsThread()
 
 FWindowsThread::~FWindowsThread()
 {
-	CloseHandle(WindowsThreadHandle);
+	::CloseHandle(WindowsThreadHandle);
 }
 
 void FWindowsThread::Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName)
@@ -45,13 +45,14 @@ void FWindowsThread::Initialize(EThreadType InType, uint32 InThreadID, const FSt
 	WindowsThreadHandle = CreateThread(NULL, 0, ThreadMain, this, CREATE_SUSPENDED, (DWORD*)&ThreadID);
 	if (!ThreadName.empty())
 	{
-		SetThreadDescription(WindowsThreadHandle, ThreadName.data());
+		::SetThreadDescription(WindowsThreadHandle, ThreadName.data());
 	}
 	FThread::Initialize(InType, ThreadID);
 }
 
 void FWindowsThread::Launch()
 {
+	Resume();
 	FThread::Launch();
 }
 
@@ -65,13 +66,13 @@ void FWindowsThread::Terminate(bool bForce)
 void FWindowsThread::Resume()
 {
 	bIsSuspended = false;
-	ResumeThread(WindowsThreadHandle);
+	::ResumeThread(WindowsThreadHandle);
 }
 
 void FWindowsThread::Suspend()
 {
 	bIsSuspended = true;
-	SuspendThread(WindowsThreadHandle);
+	::SuspendThread(WindowsThreadHandle);
 }
 
 FThread* CreatePlatformThread()

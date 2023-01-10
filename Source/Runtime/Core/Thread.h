@@ -11,7 +11,8 @@ enum EThreadType
 	VirtualGPU,
 	Worker,
 
-	ThreadTypeCount,
+	ManagedThreadTypeCount,
+	CustomThread,
 	Undefiend,
 };
 
@@ -49,7 +50,18 @@ private:
 class FThreadTask
 {
 public:
-	virtual void DoTask() = 0;
+	FThreadTask()
+		: TaskID(INVALID_ID_64)
+		, bIsDetached(false)
+		, TaskEvent(nullptr)
+	{}
+	virtual void DoTask() {};
+
+private:
+	void SetDetached(bool bDetached) { bIsDetached = bDetached; }
+
+private:
+	bool bIsDetached;
 
 protected:
 	uint64 TaskID;
@@ -82,6 +94,7 @@ public:
 class FThreadMain
 {
 public:
+	FThreadMain();
 	FThreadMain(FThread* InThread);
 	virtual ~FThreadMain();
 
@@ -124,6 +137,7 @@ public:
 	void FlushTasks();
 
 	FQueuedTaskHandle EnqueueTask(FThreadTask* Task);
+	void EnqueueDetachedTask(FThreadTask* Task);
 	void CancelTask(FQueuedTaskHandle& TaskHandle);
 
 	bool QueryTaskValid(const FQueuedTaskHandle& TaskHandle);
@@ -155,6 +169,7 @@ protected:
 
 	friend class SThreadManager;
 	friend class FNormalQueuedThreadMain;
+	friend class FProfileThreadMain;
 };
 
 

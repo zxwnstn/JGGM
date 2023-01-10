@@ -3,7 +3,7 @@
 #include "Engine/Engine.h"
 #include "Engine/AppInstance.h"
 
-int JGGMMain()
+int32 JGGMMain()
 {
 	IAppInstance* AppInstance;
 #if JGGM_EDITOR
@@ -15,25 +15,9 @@ int JGGMMain()
 
 	GEngine->Initialize();
 	
-	int ExitCode = GEngine->Run();
+	int32 ExitCode = GEngine->Run();
 
 	GEngine->ShutDown();
 
 	return ExitCode;
 }
-
-int main(int argc, char** argv)
-{
-#if _WIN32
-#endif
-	int ExitCode = 0;
-	try {
-		int ExitCode = JGGMMain();
-	}
-	catch(...){
-
-	}
-
-	return ExitCode;
-}
-

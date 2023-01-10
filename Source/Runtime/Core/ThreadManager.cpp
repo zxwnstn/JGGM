@@ -58,7 +58,7 @@ bool SThreadManager::Initialize()
     for (int32 i = EThreadType::Rendering; i <= EThreadType::VirtualGPU; ++i)
     {
 		FThread* Thread = CreateThreadInstance();
-		Thread->Initialize(static_cast<EThreadType>(i), i + ThreadTypeCount, GetThreadName(static_cast<EThreadType>(i)));
+		Thread->Initialize(static_cast<EThreadType>(i), i + ManagedThreadTypeCount, GetThreadName(static_cast<EThreadType>(i)));
         NamedThread[i] = Thread;
         Thread->Launch();
     }
@@ -72,7 +72,7 @@ bool SThreadManager::Initialize()
         FStringStream Stream;
         Stream << GetThreadName(EThreadType::Worker) << i;
 
-		Thread->Initialize(EThreadType::Worker, i + ThreadTypeCount, Stream.str());
+		Thread->Initialize(EThreadType::Worker, i + ManagedThreadTypeCount, Stream.str());
         WorkerThreadPool.insert({Thread->ThreadID, Thread});
 		Thread->Launch();
 
@@ -101,8 +101,30 @@ bool SThreadManager::ShutDown()
     }
     WorkerThreadPool.clear();
 
+    for (auto It = CustomThreadPool.begin(); It != CustomThreadPool.end(); ++It)
+    {
+        FThread* CustomThread = It->second;
+        CustomThread->Terminate(false);
+        delete CustomThread;
+    }
+    CustomThreadPool.clear();
+
     return false;
 }
+
+FThread* SThreadManager::CreateCustomThread(const FString& Name, FThreadMain* Main)
+{
+    FThread* Thread = CreateThreadInstance();
+    Main->MyThread = Thread;
+
+    Thread->Initialize(EThreadType::CustomThread, 0, Name);
+    CustomThreadPool.insert({ Thread->ThreadID, Thread });
+    Thread->ThreadMain = Main;
+    Thread->Launch();
+
+    return Thread;
+}
+
 
 FThread* SThreadManager::CreateThreadInstance()
 {
@@ -164,10 +186,17 @@ FThread* SThreadManager::GetThreadFromID(uint32 ThreadID)
 	}
 
     // Find WorkerThread
-    auto Found = WorkerThreadPool.find(ThreadID);
-    if (Found != WorkerThreadPool.end())
+    auto WorkerFound = WorkerThreadPool.find(ThreadID);
+    if (WorkerFound != WorkerThreadPool.end())
     {
-        return Found->second;
+        return WorkerFound->second;
+    }
+
+    // Find CustomThread
+    auto CustomThreadFound = CustomThreadPool.find(ThreadID);
+    if (CustomThreadFound != CustomThreadPool.end())
+    {
+        return CustomThreadFound->second;
     }
 
     return nullptr;

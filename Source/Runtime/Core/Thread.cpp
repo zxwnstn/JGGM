@@ -84,6 +84,11 @@ FThread::~FThread()
 	FEvent::ReleaseEvent(RunningEvent);
 }
 
+FThreadMain::FThreadMain()
+	: MyThread(nullptr)
+{
+}
+
 FThreadMain::FThreadMain(FThread* InThread)
 	: MyThread(InThread)
 {
@@ -107,10 +112,18 @@ public:
 		{
 			if (FThreadTask* Task = MyThread->DequeueTask())
 			{
-				MyThread->InflightTaskID = Task->TaskID;
-				Task->DoTask();
-				MyThread->LastCompletedTaskID = MyThread->InflightTaskID;
-				Task->TaskEvent->Signal();
+				if (Task->bIsDetached)
+				{
+					Task->DoTask();
+					delete Task;
+				}
+				else
+				{
+					MyThread->InflightTaskID = Task->TaskID;
+					Task->DoTask();
+					MyThread->LastCompletedTaskID = MyThread->InflightTaskID;
+					Task->TaskEvent->Signal();
+				}
 			}
 			else
 			{
@@ -201,13 +214,32 @@ FQueuedTaskHandle FThread::EnqueueTask(FThreadTask* Task)
 		TaskQueueMutex.unlock();
 	}
 
-	FThread* Thread = SThreadManager::Get().GetThreadFromID(ThreadID);
-	if (!Thread->IsRunningTask())
+	if (!IsRunningTask())
 	{
-		Thread->WakeUp();
+		WakeUp();
 	}
 
 	return TaskHandle;
+}
+
+void FThread::EnqueueDetachedTask(FThreadTask* Task)
+{
+	Task->SetDetached(true);
+	if (GetCurrentThreadID() == ThreadID)
+	{
+		TaskQueue.push_back(Task);
+	}
+	else
+	{
+		TaskQueueMutex.lock();
+		TaskQueue.push_back(Task);
+		TaskQueueMutex.unlock();
+	}
+
+	if (!IsRunningTask())
+	{
+		WakeUp();
+	}
 }
 
 void FThread::WaitTask(FQueuedTaskHandle& TaskHandle)
@@ -271,9 +303,8 @@ FThreadTask* FThread::DequeueTask()
 	else
 	{
 		bIsRunning = false;
-		return Task;
 	}
-	InflightTaskID = Task->TaskID;
+	InflightTaskID = Task ? Task->TaskID : INVALID_ID_64;
 	return Task;
 }
 

@@ -17,9 +17,11 @@ public:
 	bool Initialize();
 	bool ShutDown();
 
+	FThread* CreateCustomThread(const FString& Name, FThreadMain* Main);
+
 private:
 	FThread* CreateThreadInstance();
-
+	
 public:
 	// Thread Management
 	FThread* GetNamedThread(EThreadType Type);
@@ -78,6 +80,7 @@ public:
 		TaskStorageMutex.unlock();
 	}
 
+public:
 	template<typename TaskType, typename... Args>
 	friend FQueuedTaskHandle EnqueueThreadTask(EThreadType ThreadType, Args&&... args)
 	{
@@ -96,6 +99,11 @@ public:
 		else if(ThreadType == EThreadType::Worker)
 		{
 			Thread = ThreadManager.GetMostFreeWorkerThread();
+		}
+		else if (ThreadType == EThreadType::CustomThread)
+		{
+			// ensure
+			return TaskHandle;
 		}
 		else
 		{
@@ -116,7 +124,8 @@ private:
 
 	uint32 WorkerThreadCount;
 	std::unordered_map<uint32, FThread*> WorkerThreadPool;
-	FThread* NamedThread[ThreadTypeCount];
+	std::unordered_map<uint32, FThread*> CustomThreadPool;
+	FThread* NamedThread[ManagedThreadTypeCount];
 
 	uint64 TaskIDSource;
 	std::mutex TaskIDSourceMutex;
