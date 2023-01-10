@@ -101,7 +101,10 @@ protected:
 protected:
 	virtual void Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName = FString());
 	virtual void Launch();
-	void Terminate(bool bForce);
+	virtual void Terminate(bool bForce);
+	virtual void Resume() = 0;
+	virtual void Suspend() = 0;
+
 	int32 Run();
 
 	// FThread inner operation
@@ -137,6 +140,7 @@ protected:
 	bool bTerminated;
 	bool bRequestedExit;
 	bool bIsRunning;
+	bool bIsSuspended;
 
 	std::vector<FThreadTask*> TaskQueue;
 	std::mutex TaskQueueMutex;
@@ -146,6 +150,8 @@ protected:
 
 	FThreadMain* ThreadMain;
 	FEvent* RunningEvent;
+	FEvent* ExitEvent;
+	int32 ExitCode;
 
 	friend class SThreadManager;
 	friend class FNormalQueuedThreadMain;

@@ -70,6 +70,7 @@ FThread::FThread()
 	, bIsRunning(false)
 	, bRequestedExit(false)
 	, bTerminated(false)
+	, bIsSuspended(false)
 	, InflightTaskID(INVALID_ID_64)
 	, LastCompletedTaskID(INVALID_ID_64)
 	, ThreadID(INVALID_ID_32)
@@ -127,6 +128,9 @@ void FThread::Initialize(EThreadType InType, uint32 InThreadID, const FString& T
 	Type = InType;
 	ThreadID = InThreadID;
 	RunningEvent = FEvent::GetEvent();
+	ExitEvent = FEvent::GetEvent();
+	ExitEvent->Reset();
+	ExitCode = 0;
 	LastCompletedTaskID = 0;
 	InflightTaskID = 0;
 
@@ -163,7 +167,10 @@ void FThread::Launch()
 void FThread::Terminate(bool bForce)
 {
 	bRequestedExit = true;
-	FlushTasks();
+	if (!bForce)
+	{
+		FlushTasks();
+	}
 
 	bTerminated = true;
 	bLaunched = false;
@@ -171,7 +178,10 @@ void FThread::Terminate(bool bForce)
 
 int32 FThread::Run()
 {
-	return (*ThreadMain)();
+	ExitCode = (*ThreadMain)();
+	ExitEvent->Signal();
+
+	return ExitCode;
 }
 
 FQueuedTaskHandle FThread::EnqueueTask(FThreadTask* Task)
@@ -208,6 +218,7 @@ void FThread::WaitTask(FQueuedTaskHandle& TaskHandle)
 
 void FThread::FlushTasks()
 {
+	while (bIsRunning){}
 }
 
 void FThread::CancelTask(FQueuedTaskHandle& TaskHandle)

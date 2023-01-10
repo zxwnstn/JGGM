@@ -1,8 +1,8 @@
 #include "JGGMPch.h"
 
 #if _WIN32
-#include "../Thread.h"
-
+#include "Core/Thread.h"
+#include "Core/Event.h"
 
 class FWindowsThread : public FThread
 {
@@ -12,6 +12,11 @@ private:
 
 	virtual void Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName = FString()) override;
 	virtual void Launch() override;
+
+	virtual void Terminate(bool bForce) override;
+	virtual void Resume() override;
+	virtual void Suspend() override;
+
 
 	static ::DWORD _stdcall ThreadMain(LPVOID Thread)
 	{
@@ -47,8 +52,26 @@ void FWindowsThread::Initialize(EThreadType InType, uint32 InThreadID, const FSt
 
 void FWindowsThread::Launch()
 {
-	ResumeThread(WindowsThreadHandle);
 	FThread::Launch();
+}
+
+void FWindowsThread::Terminate(bool bForce)
+{
+	FThread::Terminate(bForce);
+	bRequestedExit = true;
+	ExitEvent->Wait();
+}
+
+void FWindowsThread::Resume()
+{
+	bIsSuspended = false;
+	ResumeThread(WindowsThreadHandle);
+}
+
+void FWindowsThread::Suspend()
+{
+	bIsSuspended = true;
+	SuspendThread(WindowsThreadHandle);
 }
 
 FThread* CreatePlatformThread()
