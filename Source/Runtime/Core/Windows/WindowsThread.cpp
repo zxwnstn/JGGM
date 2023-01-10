@@ -10,7 +10,7 @@ private:
 	FWindowsThread();
 	~FWindowsThread();
 
-	virtual void Initialize(EThreadType InType, uint32 InThreadID) override;
+	virtual void Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName = FString()) override;
 	virtual void Launch() override;
 
 	static ::DWORD _stdcall ThreadMain(LPVOID Thread)
@@ -35,16 +35,20 @@ FWindowsThread::~FWindowsThread()
 	CloseHandle(WindowsThreadHandle);
 }
 
-void FWindowsThread::Initialize(EThreadType InType, uint32 InThreadID)
+void FWindowsThread::Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName)
 {
 	WindowsThreadHandle = CreateThread(NULL, 0, ThreadMain, this, CREATE_SUSPENDED, (DWORD*)&ThreadID);
+	if (!ThreadName.empty())
+	{
+		SetThreadDescription(WindowsThreadHandle, ThreadName.data());
+	}
 	FThread::Initialize(InType, ThreadID);
 }
 
 void FWindowsThread::Launch()
 {
-	FThread::Launch();
 	ResumeThread(WindowsThreadHandle);
+	FThread::Launch();
 }
 
 FThread* CreatePlatformThread()

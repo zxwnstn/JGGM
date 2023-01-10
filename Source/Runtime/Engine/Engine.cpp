@@ -2,6 +2,7 @@
 
 #include "Engine.h"
 #include "AppInstance.h"
+#include "Core/ThreadManager.h"
 
 FEngine* GEngine = nullptr;
 
@@ -13,7 +14,15 @@ FEngine::FEngine(IAppInstance* InAppInst)
 
 void FEngine::Initialize()
 {
+	SThreadManager::Get().Initialize();
+
 	AppInst->Initialize();
+
+}
+
+void FEngine::ShutDown()
+{
+	SThreadManager::Get().ShutDown();
 }
 
 int32 FEngine::Tick()

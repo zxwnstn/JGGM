@@ -20,3 +20,11 @@ enum : int64 {
 };
 
 #endif
+
+#if _UNICODE
+	using FString = std::wstring;
+	using FStringStream = std::wstringstream;
+#else
+	using FString = std::string;
+	using FStringStream = std::stringstream;
+#endif

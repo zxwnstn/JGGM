@@ -17,6 +17,8 @@ int JGGMMain()
 	
 	int ExitCode = GEngine->Run();
 
+	GEngine->ShutDown();
+
 	return ExitCode;
 }
 

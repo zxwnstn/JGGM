@@ -8,20 +8,100 @@ SThreadManager::~SThreadManager()
 {
 }
 
+const FString GetThreadName(EThreadType Type)
+{
+    switch (Type)
+    {
+    case EThreadType::Main:
+        return FString(TEXT("MainThread"));
+    case EThreadType::Rendering:
+        return FString(TEXT("RenderingThread"));
+    case EThreadType::RHI:
+        return FString(TEXT("RHIThread"));
+    case EThreadType::VirtualGPU:
+        return FString(TEXT("GPUThread"));
+    case EThreadType::Worker:
+        return FString(TEXT("WorkerThread"));
+    default:
+		return FString();
+    }
+    return FString();
+}
+
 bool SThreadManager::Initialize()
 {
-    ThreadIDSource = 0;
+    if (NamedThread[0] != nullptr)
+    {   
+        // log - already initialized
+        return false;
+    }
+    
+    TaskIDSource = 0;
 
+    // Main Thread
+    {
+        FThread* MainThread = CreateThreadInstance();
+        MainThread->ThreadID = ::GetCurrentThreadId();
+        MainThread->Type = EThreadType::Main;
+        MainThread->bIsRunning = true;
+        MainThread->bLaunched = false;
+        MainThread->bRequestedExit = false;
+        MainThread->bTerminated = false;
 
-    uint32 WorkerThreadCount = 10; // TODO : Query CPUs Thread or could be force it
+        FInitialThreadTask Task(MainThread->ThreadID);
+        Task.DoTask();
 
+        NamedThread[0] = MainThread;
+    }
+
+    // Named Thread
+    for (int32 i = EThreadType::Rendering; i <= EThreadType::VirtualGPU; ++i)
+    {
+		FThread* Thread = CreateThreadInstance();
+		Thread->Initialize(static_cast<EThreadType>(i), i + ThreadTypeCount, GetThreadName(static_cast<EThreadType>(i)));
+        NamedThread[i] = Thread;
+        Thread->Launch();
+    }
+
+    // Worker Thread
+    WorkerThreadCount = 10; // TODO : Query CPUs Thread or could be force it
     for (int32 i = 0; i < WorkerThreadCount; ++i)
     {
         FThread* Thread = CreateThreadInstance();
-		Thread->Initialize(EThreadType::Worker, i + ThreadTypeCount);
+
+        FStringStream Stream;
+        Stream << GetThreadName(EThreadType::Worker) << i;
+
+		Thread->Initialize(EThreadType::Worker, i + ThreadTypeCount, Stream.str());
+        WorkerThreadPool.insert({Thread->ThreadID, Thread});
+		Thread->Launch();
+
+        FQueuedTaskHandle TaskHandle = Thread->EnqueueTask(SThreadManager::Get().CreateTask<FInitialWorkerThreadTask>());
+        TaskHandle.Wait();
+        TaskHandle.Finish();
     }
 
     return true;
+}
+
+bool SThreadManager::ShutDown()
+{
+	for (int32 i = EThreadType::Rendering; i <= EThreadType::VirtualGPU; ++i)
+	{
+        FThread* Thread = NamedThread[i];
+        Thread->Terminate(false);
+        delete Thread;
+	}
+
+    for (auto It = WorkerThreadPool.begin(); It != WorkerThreadPool.end(); ++It)
+    {
+        FThread* Worker = It->second;
+        Worker->Terminate(false);
+        delete Worker;
+    }
+    WorkerThreadPool.clear();
+
+    return false;
 }
 
 FThread* SThreadManager::CreateThreadInstance()
@@ -34,10 +114,61 @@ FThread* SThreadManager::CreateThreadInstance()
 
 FThread* SThreadManager::GetMostFreeWorkerThread()
 {
-    return nullptr;
+    uint32 LeastWorkCount = INT_MAX;
+    FThread* MostFreeThread = nullptr;
+	for (auto It : WorkerThreadPool)
+	{
+		FThread* Thread = It.second;
+        if (Thread->TaskQueue.size() < LeastWorkCount)
+        {
+            LeastWorkCount = Thread->TaskQueue.size();
+            MostFreeThread = Thread;
+            if (LeastWorkCount == 0)
+            {
+                break;
+            }
+        }
+	}
+
+    return MostFreeThread;
+}
+
+FThread* SThreadManager::GetNamedThread(EThreadType Type)
+{
+    return NamedThread[Type];
+}
+
+std::vector<FThread*> SThreadManager::GetWorkerThreads()
+{
+    static std::vector<FThread*> Workers;
+    if (Workers.empty())
+    {
+        for (const auto& It : WorkerThreadPool)
+        {
+            Workers.push_back(It.second);
+        }
+    }
+    return Workers;
 }
 
 FThread* SThreadManager::GetThreadFromID(uint32 ThreadID)
 {
+    // Check Named thread first
+	for (int32 i = EThreadType::Rendering; i <= EThreadType::VirtualGPU; ++i)
+	{
+		FThread* Thread = NamedThread[i];
+        if (ThreadID == Thread->ThreadID)
+        {
+            return Thread;
+        }
+	}
+
+    // Find WorkerThread
+    auto Found = WorkerThreadPool.find(ThreadID);
+    if (Found != WorkerThreadPool.end())
+    {
+        return Found->second;
+    }
+
     return nullptr;
 }

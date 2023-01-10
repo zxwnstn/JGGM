@@ -3,55 +3,93 @@
 #include "Core/Thread.h"
 #include "Core/ThreadManager.h"
 
+
 class FAddTask : public FThreadTask
 {
 public:
 	FAddTask()
 	{}
 
-	FAddTask(int32 InMultiplier)
-		: Multiplier(InMultiplier)
+	~FAddTask()
 	{}
 
 	virtual void DoTask()
 	{
 		Result = 0;
-		for (uint32 i = 0; i < 200000; ++i)
+		for (int64 i = 0; i <= 200000; ++i)
 		{
-			Result += i;
+			Result = i;
 		}
 	}
 
 public:
-	int32 Multiplier;
-	int32 Result;
+	int64 Result;
+};
+
+class FThreadedTask : public FThreadTask
+{
+public:
+	FThreadedTask(int32 InUseThreadCount)
+		: UseThreadCount(InUseThreadCount)
+		, Total(0)
+	{}
+
+	virtual void DoTask()
+	{
+		int32 Result = 0;
+		for (int32 i = 0; i < UseThreadCount; ++i)
+		{
+			TaskHandles.push_back(EnqueueThreadTask<FAddTask>(EThreadType::Worker));
+		}
+
+		for (auto& Handle : TaskHandles)
+		{
+			if (!Handle.IsDone())
+			{
+				Handle.Wait();
+			}
+			Total += Handle.GetTask<FAddTask>()->Result;
+			Handle.Finish();
+		}
+	}
+
+public:
+	int32 UseThreadCount;
+	int64 Total;
+	std::vector<FQueuedTaskHandle> TaskHandles;
 };
 
 
 void ThreadExperimentalWork()
 {
 	static FQueuedTaskHandle EditorJobHandle;
+	static int Count = 0;
+	static int Max = 10;
 
-	FThread* WorkerThread = SThreadManager::Get().GetMostFreeWorkerThread();
-	if (!EditorJobHandle.IsValid())
+	if (!EditorJobHandle.IsValid() && Count < Max)
 	{
-		EditorJobHandle = WorkerThread->QueueTask(SThreadManager::Get().CreateTask<FAddTask>(3));
+		EditorJobHandle = EnqueueThreadTask<FThreadedTask>(EThreadType::Rendering, 30);
+		++Count;
 	}
 	else
 	{
 		if (EditorJobHandle.IsDone())
 		{
-			FAddTask* Task = EditorJobHandle.GetTask<FAddTask>();
+			FThreadedTask* Task = EditorJobHandle.GetTask<FThreadedTask>();
 			// enusre(Task)
-			int32 Result = Task->Result;
+			int64 Result = Task->Total;
+			std::cout << Result;
 			EditorJobHandle.Finish();
 		}
 		else
 		{
-			int mode = 0;
-			if (mode == 0)
+			if (EditorJobHandle.IsValid())
 			{
-				EditorJobHandle.Wait();
+				int mode = 1;
+				if (mode == 0)
+				{
+					EditorJobHandle.Wait();
+				}
 			}
 		}
 	}

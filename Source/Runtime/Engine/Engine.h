@@ -9,6 +9,8 @@ private:
 
 public:
 	void Initialize();
+	void ShutDown();
+
 	int32 Run();
 	int32 Tick();
 

@@ -3,22 +3,27 @@
 #include "Thread.h"
 #include "Event.h"
 
+
+const FString GetThreadName(EThreadType Type);
+
 class SThreadManager
 {
 private:
 	SThreadManager() = default;
 	~SThreadManager();
 
-	bool Initialize();
-
 public:
 	static SThreadManager& Get() { return Inst; }
+	bool Initialize();
+	bool ShutDown();
 
 private:
 	FThread* CreateThreadInstance();
 
 public:
 	// Thread Management
+	FThread* GetNamedThread(EThreadType Type);
+	std::vector<FThread*> GetWorkerThreads();
 	FThread* GetThreadFromID(uint32 ThreadID);
 	FThread* GetMostFreeWorkerThread();
 
@@ -27,7 +32,7 @@ public:
 	FThreadTask* CreateTask(Args&&... args)
 	{
 		TaskIDSourceMutex.lock();
-		int64 TaskID = TaskIDSource++;
+		int64 TaskID = ++TaskIDSource;
 		TaskIDSourceMutex.unlock();
 
 		FThreadTask* Task = new TaskType(std::forward<Args>(args)...);
@@ -63,6 +68,7 @@ public:
 		if (Found != TaskStorage.end())
 		{
 			FThreadTask* Task = Found->second;
+			delete Task;
 			TaskStorage.erase(Found);
 		}
 		else
@@ -72,11 +78,43 @@ public:
 		TaskStorageMutex.unlock();
 	}
 
+	template<typename TaskType, typename... Args>
+	friend FQueuedTaskHandle EnqueueThreadTask(EThreadType ThreadType, Args&&... args)
+	{
+		FQueuedTaskHandle TaskHandle;
+		SThreadManager& ThreadManager = SThreadManager::Get();
+		FThread* Thread = nullptr;
+		if (ThreadType == EThreadType::Main)
+		{
+			// log - 
+			return TaskHandle;
+		}
+		else if (ThreadType < EThreadType::Worker)
+		{
+			Thread = ThreadManager.GetNamedThread(EThreadType::Rendering);
+		}
+		else if(ThreadType == EThreadType::Worker)
+		{
+			Thread = ThreadManager.GetMostFreeWorkerThread();
+		}
+		else
+		{
+			// log - 
+			return TaskHandle;
+		}
+
+		FThreadTask* Task = ThreadManager.CreateTask<TaskType>(std::forward<Args>(args)...);
+
+		TaskHandle = Thread->EnqueueTask(Task);
+
+		return TaskHandle;
+	}
+
 
 private:
 	static SThreadManager Inst;
 
-	uint32 ThreadIDSource;
+	uint32 WorkerThreadCount;
 	std::unordered_map<uint32, FThread*> WorkerThreadPool;
 	FThread* NamedThread[ThreadTypeCount];
 

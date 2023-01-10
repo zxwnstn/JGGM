@@ -9,6 +9,7 @@
 #include <string>
 #include <mutex>
 #include <functional>
+#include <sstream>
 
 #include "Core/CoreDefine.h"
 #include "Core/CoreUtil.h"

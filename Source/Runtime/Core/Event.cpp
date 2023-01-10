@@ -40,6 +40,7 @@ FEvent* FEvent::GetEvent()
 		}
 		Event = GEventPool[CurrentSize];
 	}
+	Event->Reset();
 	Event->bUsed = true;
 
 	return Event;
@@ -47,6 +48,7 @@ FEvent* FEvent::GetEvent()
 
 void FEvent::ReleaseEvent(FEvent* Event)
 {
+	Event->Reset();
 	Event->bUsed = false;
 }
 

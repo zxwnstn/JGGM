@@ -4,9 +4,13 @@
 #include "Thread.h"
 #include "ThreadManager.h"
 
-thread_local uint32 TLSThreadID;
+thread_local uint32 TLSThreadID = 0;
+thread_local bool TLSIsWorkerThread = false;
 
 FQueuedTaskHandle::FQueuedTaskHandle()
+	: TaskID(INVALID_ID_64)
+	, OwnerThread(nullptr)
+	, OwnerThreadID(INVALID_ID_32)
 {
 }
 
@@ -22,14 +26,8 @@ void FQueuedTaskHandle::Cancel()
 {
 	if (IsValid())
 	{
-		if (IsInflight())
-		{
-			// log - Task is aleady inflight, we can't do anything now
-		}
-		else
-		{
-			OwnerThread->CancelTask(*this);
-		}
+		OwnerThread->CancelTask(*this);
+		Finish();
 	}
 }
 
@@ -37,30 +35,24 @@ void FQueuedTaskHandle::Finish()
 {
 	SThreadManager::Get().FinishTask(*this);
 
-	bValid = false;
 	OwnerThread = nullptr;
-	this->bDone = true;
-	this->OwnerThreadID = INVALID_ID_32;
-	this->TaskID = INVALID_ID_64;
+	OwnerThreadID = INVALID_ID_32;
+	TaskID = INVALID_ID_64;
 }
 
 bool FQueuedTaskHandle::IsValid()
 {
-	return bValid;
+	return GetOwnerThread()->QueryTaskValid(*this);
 }
 
 bool FQueuedTaskHandle::IsInflight()
 {
-	if (IsValid())
-	{
-		return OwnerThread->QueryTaskInflight(*this);
-	}
-	return false;
+	return GetOwnerThread()->QueryTaskInflight(*this);
 }
 
 bool FQueuedTaskHandle::IsDone()
 {
-	return bDone;
+	return GetOwnerThread()->QueryTaskIsDone(*this);
 }
 
 FThread* FQueuedTaskHandle::GetOwnerThread()
@@ -114,10 +106,14 @@ public:
 		{
 			if (FThreadTask* Task = MyThread->DequeueTask())
 			{
+				MyThread->InflightTaskID = Task->TaskID;
 				Task->DoTask();
+				MyThread->LastCompletedTaskID = MyThread->InflightTaskID;
+				Task->TaskEvent->Signal();
 			}
 			else
 			{
+				MyThread->bIsRunning = false;
 				MyThread->Sleep();
 			}
 		}
@@ -126,17 +122,21 @@ public:
 	}
 };
 
-void FThread::Initialize(EThreadType InType, uint32 InThreadID)
+void FThread::Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName)
 {
 	Type = InType;
 	ThreadID = InThreadID;
 	RunningEvent = FEvent::GetEvent();
+	LastCompletedTaskID = 0;
+	InflightTaskID = 0;
+
 	switch (InType)
 	{
 	case Main:
 		break;
-	case Render:
-	case GPU:
+	case Rendering:
+	case RHI:
+	case VirtualGPU:
 	case Worker:
 		ThreadMain = new FNormalQueuedThreadMain(this);
 		break;
@@ -150,6 +150,9 @@ void FThread::Launch()
 	if (!bLaunched)
 	{
 		bLaunched = true;
+		FQueuedTaskHandle InitialTaskHandle = EnqueueTask(SThreadManager::Get().CreateTask<FInitialThreadTask>(ThreadID));
+		InitialTaskHandle.Wait();
+		InitialTaskHandle.Finish();
 	}
 	else
 	{
@@ -171,13 +174,11 @@ int32 FThread::Run()
 	return (*ThreadMain)();
 }
 
-FQueuedTaskHandle FThread::QueueTask(FThreadTask* Task)
+FQueuedTaskHandle FThread::EnqueueTask(FThreadTask* Task)
 {
 	FQueuedTaskHandle TaskHandle;
 	TaskHandle.OwnerThreadID = ThreadID;
 	TaskHandle.TaskID = Task->TaskID;
-	TaskHandle.bDone = false;
-	TaskHandle.bValid = true;
 
 	if (GetCurrentThreadID() == ThreadID)
 	{
@@ -201,8 +202,8 @@ FQueuedTaskHandle FThread::QueueTask(FThreadTask* Task)
 
 void FThread::WaitTask(FQueuedTaskHandle& TaskHandle)
 {
-
-	
+	FThreadTask* Task = SThreadManager::Get().GetTask<FThreadTask>(TaskHandle);
+	Task->TaskEvent->Wait();
 }
 
 void FThread::FlushTasks()
@@ -211,55 +212,57 @@ void FThread::FlushTasks()
 
 void FThread::CancelTask(FQueuedTaskHandle& TaskHandle)
 {
-	if (QueryTaskValid(TaskHandle))
+	if (QueryTaskInflight(TaskHandle))
 	{
-		if (QueryTaskInflight(TaskHandle))
+		// Nothing todo just wait
+		WaitTask(TaskHandle);
+	}
+	else
+	{
+		TaskQueueMutex.lock();
+		for (auto It = TaskQueue.begin(); It != TaskQueue.end(); ++It)
 		{
-			// Nothing todo just wait
-			WaitTask(TaskHandle);
-		}
-		else
-		{
-			TaskQueueMutex.lock();
-			for (auto It = TaskQueue.begin(); It != TaskQueue.end(); ++It)
+			if ((*It)->TaskID == TaskHandle.TaskID)
 			{
-				if ((*It)->TaskID == TaskHandle.TaskID)
-				{
-					TaskQueue.erase(It);
-				}
+				TaskQueue.erase(It);
 			}
-			TaskQueueMutex.unlock();
 		}
+		TaskQueueMutex.unlock();
 	}
 }
 
 bool FThread::QueryTaskValid(const FQueuedTaskHandle& TaskHandle)
 {
-	return !TaskHandle.bDone && TaskHandle.TaskID > LastCompletedTaskID;
+	return (TaskHandle.TaskID != INVALID_ID_64) && (TaskHandle.TaskID >= LastCompletedTaskID);
+}
+
+bool FThread::QueryTaskIsDone(const FQueuedTaskHandle& TaskHandle)
+{
+	return (TaskHandle.TaskID != INVALID_ID_64) && (TaskHandle.TaskID <= LastCompletedTaskID);
 }
 
 bool FThread::QueryTaskInflight(const FQueuedTaskHandle& TaskHandle)
 {
-	return TaskHandle.TaskID == InflightTaskID;
+	return (TaskHandle.TaskID != INVALID_ID_64) && (TaskHandle.TaskID == InflightTaskID);
 }
 
 FThreadTask* FThread::DequeueTask()
 {
-	FThreadTask* Task;
-	TaskQueueMutex.lock();
+	FThreadTask* Task = nullptr;
 	if (!TaskQueue.empty())
 	{
 		bIsRunning = true;
+		TaskQueueMutex.lock();
 		Task = *TaskQueue.begin();
 		TaskQueue.erase(TaskQueue.begin());
+		TaskQueueMutex.unlock();
 	}
 	else
 	{
 		bIsRunning = false;
-		return nullptr;
+		return Task;
 	}
 	InflightTaskID = Task->TaskID;
-	TaskQueueMutex.unlock();
 	return Task;
 }
 
@@ -277,7 +280,7 @@ void FThread::WakeUp()
 
 bool FThread::IsRunningTask()
 {
-	return false;
+	return bIsRunning;
 }
 
 
@@ -286,8 +289,37 @@ uint32 GetCurrentThreadID()
 	return TLSThreadID;
 }
 
+bool IsInMainThread()
+{
+	return GetCurrentThreadID() == SThreadManager::Get().GetNamedThread(EThreadType::Main)->GetThreadID();
+}
+
+bool IsInRenderingThread()
+{
+	return GetCurrentThreadID() == SThreadManager::Get().GetNamedThread(EThreadType::Rendering)->GetThreadID();
+}
+
+bool IsInGPUThread()
+{
+	return GetCurrentThreadID() == SThreadManager::Get().GetNamedThread(EThreadType::VirtualGPU)->GetThreadID();
+}
+
+bool IsInRHIThread()
+{
+	return GetCurrentThreadID() == SThreadManager::Get().GetNamedThread(EThreadType::RHI)->GetThreadID();
+}
+
+bool IsInWorkerThread()
+{
+	return TLSIsWorkerThread;
+}
+
 void FInitialThreadTask::DoTask()
 {
 	TLSThreadID = this->ThreadID;
 }
 
+void FInitialWorkerThreadTask::DoTask()
+{
+	TLSIsWorkerThread = true;
+}

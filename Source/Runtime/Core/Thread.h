@@ -6,9 +6,9 @@ class FEvent;
 enum EThreadType
 {
 	Main,
-	Render,
-	// RHI, 
-	GPU,
+	Rendering,
+	RHI, 
+	VirtualGPU,
 	Worker,
 
 	ThreadTypeCount,
@@ -42,9 +42,6 @@ private:
 	FThread* OwnerThread;
 	uint32 OwnerThreadID;
 
-	bool bDone;
-	bool bValid;
-
 	friend class FThread;
 	friend class SThreadManager;
 };
@@ -70,11 +67,17 @@ public:
 	FInitialThreadTask(uint32 InThreadID)
 		: ThreadID(InThreadID)
 	{}
-	virtual void DoTask();
+	virtual void DoTask() override;
 	
 	uint32 ThreadID;
 };
 
+class FInitialWorkerThreadTask : public FThreadTask
+{
+public:
+	FInitialWorkerThreadTask() = default;
+	virtual void DoTask() override;
+};
 
 class FThreadMain
 {
@@ -96,7 +99,7 @@ protected:
 
 	// Interface's for ThreadManager
 protected:
-	virtual void Initialize(EThreadType InType, uint32 InThreadID);
+	virtual void Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName = FString());
 	virtual void Launch();
 	void Terminate(bool bForce);
 	int32 Run();
@@ -117,11 +120,14 @@ public:
 	void WaitTask(FQueuedTaskHandle& Task);
 	void FlushTasks();
 
-	FQueuedTaskHandle QueueTask(FThreadTask* Task);
+	FQueuedTaskHandle EnqueueTask(FThreadTask* Task);
 	void CancelTask(FQueuedTaskHandle& TaskHandle);
 
 	bool QueryTaskValid(const FQueuedTaskHandle& TaskHandle);
 	bool QueryTaskInflight(const FQueuedTaskHandle& TaskHandle);
+	bool QueryTaskIsDone(const FQueuedTaskHandle& TaskHandle);
+
+	uint32 GetThreadID() { return ThreadID; }
 
 protected:
 	EThreadType Type;
@@ -145,5 +151,4 @@ protected:
 	friend class FNormalQueuedThreadMain;
 };
 
-uint32 GetCurrentThreadID();
 

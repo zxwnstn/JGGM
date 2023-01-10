@@ -9,6 +9,9 @@ public:
 	static void ShoutDownEventPool();
 
 public:
+	FEvent()
+		: bUsed(false)
+	{}
 	virtual ~FEvent() {};
 
 	virtual void Wait() = 0;
