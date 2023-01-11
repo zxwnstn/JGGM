@@ -33,4 +33,9 @@ double PlatformTimerElapsedTimeFromStart()
 	return PlatformTimerToMilliSecond(PlatformTimerGetNowCycle() - Inner::GStartCycle);
 }
 
+void PlatformSleep(int32 MilliSecond)
+{
+	::Sleep(MilliSecond);
+}
+
 #endif

@@ -29,14 +29,21 @@ public:
 	FThread* GetThreadFromID(uint32 ThreadID);
 	FThread* GetMostFreeWorkerThread();
 
+	int64 GetNewTaskID()
+	{
+		TaskIDSourceMutex.lock();
+		int64 TaskID = TaskIDSource;
+		++TaskIDSource;
+		TaskIDSourceMutex.unlock();
+
+		return TaskID;
+	}
+
 	// Task Management
 	template<typename TaskType, typename... Args>
 	FThreadTask* CreateTask(Args&&... args)
 	{
-		TaskIDSourceMutex.lock();
-		int64 TaskID = ++TaskIDSource;
-		TaskIDSourceMutex.unlock();
-
+		int64 TaskID = GetNewTaskID();
 		FThreadTask* Task = new TaskType(std::forward<Args>(args)...);
 		Task->TaskID = TaskID;
 		Task->TaskEvent = FEvent::GetEvent();
@@ -48,11 +55,11 @@ public:
 		return Task;
 	}
 
-	template<typename TaskType> 
-	TaskType* GetTask(const FQueuedTaskHandle& TaskHandle)
+	template<typename TaskType>
+	TaskType* GetTask(int64 TaskID)
 	{
 		TaskStorageMutex.lock();
-		auto Found = TaskStorage.find(TaskHandle.TaskID);
+		auto Found = TaskStorage.find(TaskID);
 		if (Found != TaskStorage.end())
 		{
 			TaskType* Task = (TaskType*)(Found->second);
@@ -61,6 +68,12 @@ public:
 		}
 		TaskStorageMutex.unlock();
 		return nullptr;
+	}
+
+	template<typename TaskType> 
+	TaskType* GetTask(const FQueuedTaskHandle& TaskHandle)
+	{
+		return GetTask<TaskType>(TaskHandle.TaskID);
 	}
 
 	void FinishTask(const FQueuedTaskHandle& TaskHandle)

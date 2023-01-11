@@ -28,6 +28,7 @@ public:
 	bool IsValid();
 	bool IsInflight();
 	bool IsDone();
+	FThread* GetOwnerThread();
 
 	template<typename TaskType>
 	TaskType* GetTask()
@@ -37,8 +38,6 @@ public:
 	}
 
 private:
-	FThread* GetOwnerThread();
-
 	uint64 TaskID;
 	FThread* OwnerThread;
 	uint32 OwnerThreadID;
@@ -49,7 +48,7 @@ private:
 
 class FThreadTask
 {
-public:
+protected:
 	FThreadTask()
 		: TaskID(INVALID_ID_64)
 		, bIsDetached(false)
@@ -58,7 +57,13 @@ public:
 	virtual void DoTask() {};
 
 private:
-	void SetDetached(bool bDetached) { bIsDetached = bDetached; }
+	void Finish();
+
+private:
+	void SetDetached(bool bDetached) 
+	{ 
+		bIsDetached = bDetached; 
+	}
 
 private:
 	bool bIsDetached;
@@ -113,10 +118,10 @@ protected:
 	// Interface's for ThreadManager
 protected:
 	virtual void Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName = FString());
-	virtual void Launch();
-	virtual void Terminate(bool bForce);
-	virtual void Resume() = 0;
-	virtual void Suspend() = 0;
+	virtual bool Launch();
+	virtual bool Terminate(bool bForce);
+	virtual bool Resume();
+	virtual bool Suspend();
 
 	int32 Run();
 
@@ -133,7 +138,10 @@ public:
 	inline bool IsLaunched() { return bLaunched; } 
 
 	bool IsRunningTask();
-	void WaitTask(FQueuedTaskHandle& Task);
+	void WaitTask(FQueuedTaskHandle& Task); 
+	void WaitTask(FThreadTask* Task);
+
+	// Flush in this system means wait task that last queued
 	void FlushTasks();
 
 	FQueuedTaskHandle EnqueueTask(FThreadTask* Task);
@@ -153,7 +161,7 @@ protected:
 	bool bLaunched;
 	bool bTerminated;
 	bool bRequestedExit;
-	bool bIsRunning;
+	bool bIsRunningTask;
 	bool bIsSuspended;
 
 	std::vector<FThreadTask*> TaskQueue;

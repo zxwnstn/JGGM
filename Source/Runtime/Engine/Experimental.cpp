@@ -68,7 +68,10 @@ void ThreadExperimentalWork()
 
 	if (!EditorJobHandle.IsValid() && Count < Max)
 	{
+		FThread* Thread = SThreadManager::Get().GetNamedThread(EThreadType::Rendering);
+		Thread->FlushTasks();
 		EditorJobHandle = EnqueueThreadTask<FThreadedTask>(EThreadType::Rendering, 30);
+		Thread->FlushTasks();
 		++Count;
 	}
 	else

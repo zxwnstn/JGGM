@@ -40,7 +40,7 @@ public:
 			}
 			else
 			{
-				MyThread->bIsRunning = false;
+				MyThread->bIsRunningTask = false;
 				MyThread->Sleep();
 			}
 		}
@@ -82,7 +82,7 @@ void SCPUProfiler::EnqueueEvent(FProfileData&& Data)
 		DataBuffer.emplace_back(std::move(Data));
 		if (DataBuffer.size() >= MaxBufferingDataCount)
 		{
-			ProfileThread->EnqueueDetachedTask(new FProfileTask(std::move(DataBuffer)));
+			ProfileThread->EnqueueDetachedTask(SThreadManager::Get().CreateTask<FProfileTask>(std::move(DataBuffer)));
 			DataBuffer.clear();
 		}
 	}

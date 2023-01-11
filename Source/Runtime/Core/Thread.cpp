@@ -67,7 +67,7 @@ FThread* FQueuedTaskHandle::GetOwnerThread()
 FThread::FThread()
 	: Type(EThreadType::Undefiend)
 	, bLaunched(false)
-	, bIsRunning(false)
+	, bIsRunningTask(false)
 	, bRequestedExit(false)
 	, bTerminated(false)
 	, bIsSuspended(false)
@@ -110,12 +110,12 @@ public:
 	{
 		while (!MyThread->IsRequestedExit())
 		{
-			if (FThreadTask* Task = MyThread->DequeueTask())
+			while (FThreadTask* Task = MyThread->DequeueTask())
 			{
 				if (Task->bIsDetached)
 				{
 					Task->DoTask();
-					delete Task;
+					Task->Handle.Finish();
 				}
 				else
 				{
@@ -125,9 +125,9 @@ public:
 					Task->TaskEvent->Signal();
 				}
 			}
-			else
+			if (!MyThread->IsRequestedExit())
 			{
-				MyThread->bIsRunning = false;
+				MyThread->bIsRunningTask = false;
 				MyThread->Sleep();
 			}
 		}
@@ -146,6 +146,8 @@ void FThread::Initialize(EThreadType InType, uint32 InThreadID, const FString& T
 	ExitCode = 0;
 	LastCompletedTaskID = 0;
 	InflightTaskID = 0;
+	bIsRunningTask = false;
+	bIsSuspended = true;
 
 	switch (InType)
 	{
@@ -162,7 +164,7 @@ void FThread::Initialize(EThreadType InType, uint32 InThreadID, const FString& T
 	}
 }
 
-void FThread::Launch()
+bool FThread::Launch()
 {
 	if (!bLaunched)
 	{
@@ -170,23 +172,52 @@ void FThread::Launch()
 		FQueuedTaskHandle InitialTaskHandle = EnqueueTask(SThreadManager::Get().CreateTask<FInitialThreadTask>(ThreadID));
 		InitialTaskHandle.Wait();
 		InitialTaskHandle.Finish();
+		return true;
 	}
 	else
 	{
 		// log - This Thread is aleady launched
 	}
+	return false;
 }
 
-void FThread::Terminate(bool bForce)
+bool FThread::Terminate(bool bForce)
 {
-	bRequestedExit = true;
-	if (!bForce)
+	if (!bTerminated && IsInMainThread())
 	{
-		FlushTasks();
-	}
+		if (!bForce)
+		{
+			bRequestedExit = true;
+			FlushTasks();
+		}
+		ExitEvent->Wait();
 
-	bTerminated = true;
-	bLaunched = false;
+		bTerminated = true;
+		bLaunched = false;
+
+		return true;
+	}
+	return false;
+}
+
+bool FThread::Resume()
+{
+	if (bIsSuspended && IsInMainThread())
+	{
+		bIsSuspended = false;
+		return true;
+	}
+	return false;
+}
+
+bool FThread::Suspend()
+{
+	if (!bIsSuspended && IsInMainThread())
+	{
+		bIsSuspended = true;
+		return true;
+	}
+	bIsSuspended = false;
 }
 
 int32 FThread::Run()
@@ -225,32 +256,39 @@ FQueuedTaskHandle FThread::EnqueueTask(FThreadTask* Task)
 void FThread::EnqueueDetachedTask(FThreadTask* Task)
 {
 	Task->SetDetached(true);
-	if (GetCurrentThreadID() == ThreadID)
-	{
-		TaskQueue.push_back(Task);
-	}
-	else
-	{
-		TaskQueueMutex.lock();
-		TaskQueue.push_back(Task);
-		TaskQueueMutex.unlock();
-	}
-
-	if (!IsRunningTask())
-	{
-		WakeUp();
-	}
+	EnqueueTask(Task);
 }
 
 void FThread::WaitTask(FQueuedTaskHandle& TaskHandle)
 {
 	FThreadTask* Task = SThreadManager::Get().GetTask<FThreadTask>(TaskHandle);
+	WaitTask(Task);
+}
+
+void FThread::WaitTask(FThreadTask* Task)
+{
 	Task->TaskEvent->Wait();
 }
 
 void FThread::FlushTasks()
 {
-	while (bIsRunning){}
+	TaskQueueMutex.lock();
+	FThreadTask* LastQueuedTask = nullptr;
+	if (TaskQueue.size())
+	{
+		LastQueuedTask = TaskQueue.back();
+	}
+	else if(InflightTaskID != INVALID_ID_64)
+	{
+		LastQueuedTask = SThreadManager::Get().GetTask<FThreadTask>(InflightTaskID);
+	}
+	TaskQueueMutex.unlock();
+
+	if (LastQueuedTask)
+	{
+		WaitTask(LastQueuedTask);
+		LastQueuedTask->Handle.Finish();
+	}
 }
 
 void FThread::CancelTask(FQueuedTaskHandle& TaskHandle)
@@ -294,7 +332,7 @@ FThreadTask* FThread::DequeueTask()
 	FThreadTask* Task = nullptr;
 	if (!TaskQueue.empty())
 	{
-		bIsRunning = true;
+		bIsRunningTask = true;
 		TaskQueueMutex.lock();
 		Task = *TaskQueue.begin();
 		TaskQueue.erase(TaskQueue.begin());
@@ -302,7 +340,7 @@ FThreadTask* FThread::DequeueTask()
 	}
 	else
 	{
-		bIsRunning = false;
+		bIsRunningTask = false;
 	}
 	InflightTaskID = Task ? Task->TaskID : INVALID_ID_64;
 	return Task;
@@ -322,9 +360,8 @@ void FThread::WakeUp()
 
 bool FThread::IsRunningTask()
 {
-	return bIsRunning;
+	return bIsRunningTask;
 }
-
 
 uint32 GetCurrentThreadID()
 {

@@ -43,7 +43,7 @@ bool SThreadManager::Initialize()
         FThread* MainThread = CreateThreadInstance();
         MainThread->ThreadID = ::GetCurrentThreadId();
         MainThread->Type = EThreadType::Main;
-        MainThread->bIsRunning = true;
+        MainThread->bIsRunningTask = true;
         MainThread->bLaunched = false;
         MainThread->bRequestedExit = false;
         MainThread->bTerminated = false;

@@ -11,11 +11,11 @@ private:
 	~FWindowsThread();
 
 	virtual void Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName = FString()) override;
-	virtual void Launch() override;
+	virtual bool Launch() override;
 
-	virtual void Terminate(bool bForce) override;
-	virtual void Resume() override;
-	virtual void Suspend() override;
+	virtual bool Terminate(bool bForce) override;
+	virtual bool Resume() override;
+	virtual bool Suspend() override;
 
 
 	static ::DWORD _stdcall ThreadMain(LPVOID Thread)
@@ -42,37 +42,48 @@ FWindowsThread::~FWindowsThread()
 
 void FWindowsThread::Initialize(EThreadType InType, uint32 InThreadID, const FString& ThreadName)
 {
+	FThread::Initialize(InType, ThreadID);
 	WindowsThreadHandle = CreateThread(NULL, 0, ThreadMain, this, CREATE_SUSPENDED, (DWORD*)&ThreadID);
 	if (!ThreadName.empty())
 	{
 		::SetThreadDescription(WindowsThreadHandle, ThreadName.data());
 	}
-	FThread::Initialize(InType, ThreadID);
 }
 
-void FWindowsThread::Launch()
+bool FWindowsThread::Launch()
 {
 	Resume();
-	FThread::Launch();
+	return FThread::Launch();
 }
 
-void FWindowsThread::Terminate(bool bForce)
+bool FWindowsThread::Terminate(bool bForce)
 {
-	FThread::Terminate(bForce);
-	bRequestedExit = true;
-	ExitEvent->Wait();
+	if (FThread::Terminate(bForce))
+	{
+		::CloseHandle(WindowsThreadHandle);
+		return true;
+	}
+	return false;
 }
 
-void FWindowsThread::Resume()
+bool FWindowsThread::Resume()
 {
-	bIsSuspended = false;
-	::ResumeThread(WindowsThreadHandle);
+	if (FThread::Resume())
+	{
+		::ResumeThread(WindowsThreadHandle);
+		return true;
+	}
+	return false;
 }
 
-void FWindowsThread::Suspend()
+bool FWindowsThread::Suspend()
 {
-	bIsSuspended = true;
-	::SuspendThread(WindowsThreadHandle);
+	if (FThread::Suspend())
+	{
+		::SuspendThread(WindowsThreadHandle);
+		return true;
+	}
+	return false;
 }
 
 FThread* CreatePlatformThread()
